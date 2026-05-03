@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 
-const API_URL = "PASTE_YOUR_APPS_SCRIPT_URL";
+const API_URL = "https://script.google.com/macros/s/AKfycbzlp0yP-NKtixeoBWAIusWCrVIOv7kJEzerrROuwBYxPpHRJaTElvEosqECBJseNjCR/exec";
 
 export default function RO() {
   const [students, setStudents] = useState([]);

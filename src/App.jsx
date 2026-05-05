@@ -4,7 +4,7 @@ import { Button } from "./components/ui/button.jsx";
 import { Input } from "./components/ui/input.jsx";
 
 const API_URL =
-  "https://script.google.com/macros/s/AKfycbytisjv4mLp9bW1CAu_93PsKpLlKD2LDSggVinQNwSQHhqAFzGix-R8a6bqpTWi0oDe/exec";
+  "https://script.google.com/macros/s/AKfycbwEfPGjZv2r8hsYPW7C5nz6LVeuAQ_jZ66e2_tYITASlqre8yiMXeCO5ol6bbBsUNfB/exec";
 
 const PAGE_SIZE = 50;
 
@@ -17,7 +17,7 @@ function money(n) {
 }
 
 function badge(value) {
-  if (["Active", "Clear", "IUC"].includes(value)) return "bg-emerald-100 text-emerald-700";
+  if (["Active", "Clear", "IUC", "Taken"].includes(value)) return "bg-emerald-100 text-emerald-700";
   if (["Pending Update", "YEG", "YPR", "Ongoing"].includes(value)) return "bg-blue-100 text-blue-700";
   if (["Blocked", "Outstanding"].includes(value)) return "bg-red-100 text-red-700";
   return "bg-slate-100 text-slate-700";
@@ -41,13 +41,31 @@ function normalizeStudent(raw) {
   };
 }
 
+const emptyNewStudent = {
+  studentId: "",
+  studentName: "",
+  icPassport: "",
+  program: "",
+  intake: "",
+  studentCategory: "",
+  feeGroup: "",
+  assignedPic: "",
+};
+
 export default function App() {
   const [students, setStudents] = useState([]);
+  const [lookup, setLookup] = useState({ feeMaster: [], picUsers: [] });
+
   const [programFilter, setProgramFilter] = useState("All");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [lmsFilter, setLmsFilter] = useState("All");
   const [search, setSearch] = useState("");
+  const [filterApplied, setFilterApplied] = useState(false);
+
   const [showNewStudent, setShowNewStudent] = useState(false);
+  const [newStudent, setNewStudent] = useState(emptyNewStudent);
+  const [savingStudent, setSavingStudent] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
 
@@ -67,6 +85,18 @@ export default function App() {
     setLoading(false);
   }
 
+  async function loadLookup() {
+    const res = await fetch(`${API_URL}?action=getLookupData`);
+    const data = await res.json();
+
+    if (data.success) {
+      setLookup({
+        feeMaster: data.feeMaster || [],
+        picUsers: data.picUsers || [],
+      });
+    }
+  }
+
   async function openStudent(student) {
     setSelectedStudent(student);
     setStudentDetail(null);
@@ -80,12 +110,9 @@ export default function App() {
 
       if (data.success) {
         setStudentDetail(data.student);
-      } else {
-        setStudentDetail(null);
       }
     } catch (err) {
       console.error(err);
-      setStudentDetail(null);
     }
 
     setDetailLoading(false);
@@ -99,6 +126,7 @@ export default function App() {
 
   useEffect(() => {
     loadStudents();
+    loadLookup();
   }, []);
 
   useEffect(() => {
@@ -109,13 +137,7 @@ export default function App() {
   const categories = [...new Set(students.map((s) => s.category).filter(Boolean))];
   const lmsStatuses = [...new Set(students.map((s) => s.lmsStatus).filter(Boolean))];
 
-  const hasFilter =
-    search.trim() !== "" ||
-    programFilter !== "All" ||
-    categoryFilter !== "All" ||
-    lmsFilter !== "All";
-
-  const filtered = hasFilter
+  const filtered = filterApplied
     ? students.filter((s) => {
         const matchProgram = programFilter === "All" || s.program === programFilter;
         const matchCategory = categoryFilter === "All" || s.category === categoryFilter;
@@ -135,11 +157,17 @@ export default function App() {
   const startIndex = (page - 1) * PAGE_SIZE;
   const paginated = filtered.slice(startIndex, startIndex + PAGE_SIZE);
 
+  function applyFilter() {
+    setFilterApplied(true);
+    setPage(1);
+  }
+
   function resetFilters() {
     setSearch("");
     setProgramFilter("All");
     setCategoryFilter("All");
     setLmsFilter("All");
+    setFilterApplied(false);
     setPage(1);
   }
 
@@ -196,12 +224,105 @@ export default function App() {
         ? categoryFilter
         : lmsFilter !== "All"
         ? lmsFilter
-        : "Filtered";
+        : "All";
 
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.download = `SPPP_RO_${filterName}_Students.csv`;
     link.click();
+  }
+
+  function openAddStudentModal() {
+    const defaultProgram = programmes[0] || "";
+    const pic = getPicByProgram(defaultProgram);
+    const feeGroups = getFeeGroupsByProgram(defaultProgram);
+
+    setNewStudent({
+      ...emptyNewStudent,
+      program: defaultProgram,
+      assignedPic: pic?.PIC || "",
+      feeGroup: feeGroups[0]?.["Fee Group"] || "",
+    });
+
+    setShowNewStudent(true);
+  }
+
+  function getPicByProgram(program) {
+    return lookup.picUsers.find(
+      (p) =>
+        String(p.Program || "").trim() === String(program || "").trim() &&
+        String(p.Role || "").trim().toUpperCase() === "PIC"
+    );
+  }
+
+  function getFeeGroupsByProgram(program) {
+    return lookup.feeMaster.filter(
+      (f) => String(f.Program || "").trim() === String(program || "").trim()
+    );
+  }
+
+  function updateNewStudent(field, value) {
+    if (field === "program") {
+      const pic = getPicByProgram(value);
+      const feeGroups = getFeeGroupsByProgram(value);
+
+      setNewStudent((prev) => ({
+        ...prev,
+        program: value,
+        assignedPic: pic?.PIC || "",
+        feeGroup: feeGroups[0]?.["Fee Group"] || "",
+      }));
+      return;
+    }
+
+    setNewStudent((prev) => ({ ...prev, [field]: value }));
+  }
+
+  async function submitNewStudent() {
+    if (
+      !newStudent.studentId ||
+      !newStudent.studentName ||
+      !newStudent.icPassport ||
+      !newStudent.program ||
+      !newStudent.intake ||
+      !newStudent.studentCategory ||
+      !newStudent.feeGroup
+    ) {
+      alert("Please complete all required fields.");
+      return;
+    }
+
+    setSavingStudent(true);
+
+    try {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "addNewStudent",
+          ...newStudent,
+          lmsStatus: "Pending Update",
+          status: "Active",
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!data.success) {
+        alert(data.message || "Failed to add student.");
+        setSavingStudent(false);
+        return;
+      }
+
+      alert("New student added successfully. PIC coordinator has been notified.");
+      setShowNewStudent(false);
+      setNewStudent(emptyNewStudent);
+      await loadStudents();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to add student. Please try again.");
+    }
+
+    setSavingStudent(false);
   }
 
   const summary = useMemo(() => {
@@ -225,25 +346,6 @@ export default function App() {
       };
     });
 
-    const offeringMap = {};
-    students.forEach((student) => {
-      (student.subjects || []).forEach((subject) => {
-        if (subject.status !== "Ongoing") return;
-
-        const key = `${student.program}|${subject.subjectCode}|${subject.subjectName}`;
-
-        if (!offeringMap[key]) {
-          offeringMap[key] = {
-            program: student.program,
-            subject: `${subject.subjectCode} ${subject.subjectName}`,
-            total: 0,
-          };
-        }
-
-        offeringMap[key].total += 1;
-      });
-    });
-
     return {
       total: students.length,
       collected: students.reduce((sum, s) => sum + s.paidAmount, 0),
@@ -252,7 +354,6 @@ export default function App() {
       active: students.filter((s) => s.lmsStatus === "Active").length,
       byProgram,
       byCategory,
-      currentOfferings: Object.values(offeringMap).sort((a, b) => b.total - a.total),
     };
   }, [students, programmes, categories]);
 
@@ -281,7 +382,7 @@ export default function App() {
           <div className="flex gap-3">
             <Button
               className="rounded-full bg-white text-slate-900 hover:bg-blue-50 px-5 py-2"
-              onClick={() => setShowNewStudent(true)}
+              onClick={openAddStudentModal}
             >
               + Add New Student
             </Button>
@@ -299,11 +400,7 @@ export default function App() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <Stat title="Total Students" value={summary.total} />
           <Stat title="Total Collected" value={money(summary.collected)} />
-          <Stat
-            title="Total Outstanding"
-            value={money(summary.outstanding)}
-            danger={summary.outstanding > 0}
-          />
+          <Stat title="Total Outstanding" value={money(summary.outstanding)} danger={summary.outstanding > 0} />
           <Stat title="LMS Blocked" value={summary.blocked} danger={summary.blocked > 0} />
           <Stat title="LMS Active" value={summary.active} />
         </div>
@@ -334,103 +431,22 @@ export default function App() {
 
         <Card className="rounded-3xl border border-slate-200 bg-white shadow-md">
           <CardContent className="p-6">
-            <div className="flex items-start justify-between gap-4 mb-5">
-              <div>
-                <h2 className="font-bold text-lg">Current Subject Offering</h2>
-                <p className="text-sm text-slate-500">
-                  Subjects currently marked as Ongoing across all postgraduate programmes.
-                </p>
-              </div>
-              <span className="rounded-full bg-blue-100 text-blue-700 px-4 py-1 text-xs font-bold">
-                Live from progress data
-              </span>
-            </div>
-
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-slate-600">
-                  <tr>
-                    <th className="text-left p-3">Programme</th>
-                    <th className="text-left p-3">Subject Currently Offered</th>
-                    <th className="text-right p-3">Students Ongoing</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {summary.currentOfferings.length === 0 ? (
-                    <tr>
-                      <td colSpan="3" className="p-4 text-slate-500">
-                        No ongoing subject found.
-                      </td>
-                    </tr>
-                  ) : (
-                    summary.currentOfferings.map((item) => (
-                      <tr
-                        key={`${item.program}-${item.subject}`}
-                        className="border-t border-slate-200 hover:bg-slate-50"
-                      >
-                        <td className="p-3">
-                          <span className="rounded-full bg-blue-100 text-blue-700 px-3 py-1 text-xs font-bold">
-                            {item.program}
-                          </span>
-                        </td>
-                        <td className="p-3 font-semibold text-slate-900">{item.subject}</td>
-                        <td className="p-3 text-right font-bold">{item.total}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {showNewStudent && (
-          <Card className="rounded-3xl border border-blue-200 bg-white shadow-md">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="font-bold text-xl">Add New Student</h2>
-                  <p className="text-sm text-slate-500">
-                    UI ready. Backend save + email notification PIC akan kita connect next.
-                  </p>
-                </div>
-                <Button
-                  className="rounded-full border border-slate-200 bg-white px-5 py-2"
-                  onClick={() => setShowNewStudent(false)}
-                >
-                  Close
-                </Button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <Field label="Student ID" placeholder="MBA26001" />
-                <Field label="Student Name" placeholder="Full name" />
-                <Field label="IC / Passport" placeholder="900101011234" />
-                <SelectField
-                  label="Programme"
-                  options={programmes.length ? programmes : ["MBA", "MBM", "MHUM", "PHD"]}
-                />
-                <Field label="Intake" placeholder="May 2026" />
-                <Field label="Student Category" placeholder="IUC / YEG / YPR" />
-                <Field label="Fee Group" placeholder="MBA_FULL" />
-                <Field label="Assigned PIC" placeholder="MBA Coordinator" />
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        <Card className="rounded-3xl border border-slate-200 bg-white shadow-md">
-          <CardContent className="p-6">
             <div className="flex flex-col gap-4 mb-5">
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                 <div>
                   <h2 className="font-bold text-xl">All Postgraduate Students</h2>
                   <p className="text-sm text-slate-500">
-                    Search or filter first to display student records.
+                    Select filters and click Apply Filter to display student records.
                   </p>
                 </div>
 
                 <div className="flex flex-wrap gap-3">
+                  <Button
+                    className="rounded-full bg-slate-900 text-white px-5 py-2"
+                    onClick={applyFilter}
+                  >
+                    Apply Filter
+                  </Button>
                   <Button
                     className="rounded-full bg-slate-900 text-white px-5 py-2 disabled:opacity-40"
                     onClick={exportCSV}
@@ -454,132 +470,38 @@ export default function App() {
                   placeholder="Search name / ID / IC"
                 />
 
-                <select
-                  value={programFilter}
-                  onChange={(e) => setProgramFilter(e.target.value)}
-                  className="rounded-xl border border-slate-200 px-3 py-2 bg-white"
-                >
-                  {["All", ...programmes].map((p) => (
-                    <option key={p}>{p}</option>
-                  ))}
+                <select value={programFilter} onChange={(e) => setProgramFilter(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 bg-white">
+                  {["All", ...programmes].map((p) => <option key={p}>{p}</option>)}
                 </select>
 
-                <select
-                  value={categoryFilter}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                  className="rounded-xl border border-slate-200 px-3 py-2 bg-white"
-                >
-                  {["All", ...categories].map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
+                <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 bg-white">
+                  {["All", ...categories].map((c) => <option key={c}>{c}</option>)}
                 </select>
 
-                <select
-                  value={lmsFilter}
-                  onChange={(e) => setLmsFilter(e.target.value)}
-                  className="rounded-xl border border-slate-200 px-3 py-2 bg-white"
-                >
-                  {["All", ...lmsStatuses].map((l) => (
-                    <option key={l}>{l}</option>
-                  ))}
+                <select value={lmsFilter} onChange={(e) => setLmsFilter(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 bg-white">
+                  {["All", ...lmsStatuses].map((l) => <option key={l}>{l}</option>)}
                 </select>
               </div>
             </div>
 
-            {!hasFilter ? (
-              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-slate-500">
-                Please search or select a filter to display student records.
-              </div>
+            {!filterApplied ? (
+              <EmptyState text="Please click Apply Filter to display student records." />
             ) : filtered.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-slate-500">
-                No student records found for the selected filter.
-              </div>
+              <EmptyState text="No student records found for the selected filter." />
             ) : (
               <>
                 <div className="mb-3 flex items-center justify-between text-sm text-slate-500">
-                  <p>
-                    Showing {startIndex + 1}–{Math.min(startIndex + PAGE_SIZE, filtered.length)} of{" "}
-                    {filtered.length} record(s)
-                  </p>
-                  <p>
-                    Page {page} of {totalPages}
-                  </p>
+                  <p>Showing {startIndex + 1}–{Math.min(startIndex + PAGE_SIZE, filtered.length)} of {filtered.length} record(s)</p>
+                  <p>Page {page} of {totalPages}</p>
                 </div>
 
-                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 text-slate-600">
-                      <tr>
-                        <th className="text-left p-3">Student</th>
-                        <th className="text-left p-3">Programme</th>
-                        <th className="text-left p-3">Category</th>
-                        <th className="text-left p-3">PIC</th>
-                        <th className="text-left p-3">LMS</th>
-                        <th className="text-right p-3">Outstanding</th>
-                        <th className="text-right p-3">Action</th>
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {paginated.map((student) => (
-                        <tr key={student.id} className="border-t border-slate-200 hover:bg-slate-50">
-                          <td className="p-3">
-                            <p className="font-semibold text-slate-900">{student.name}</p>
-                            <p className="text-xs text-slate-500">
-                              {student.id} · {student.ic} · {student.intake}
-                            </p>
-                          </td>
-                          <td className="p-3">
-                            <span className="rounded-full bg-blue-100 text-blue-700 px-3 py-1 text-xs font-bold">
-                              {student.program}
-                            </span>
-                          </td>
-                          <td className="p-3">
-                            <span className={`rounded-full px-3 py-1 text-xs font-bold ${badge(student.category)}`}>
-                              {student.category}
-                            </span>
-                          </td>
-                          <td className="p-3 text-slate-600">{student.pic}</td>
-                          <td className="p-3">
-                            <span className={`rounded-full px-3 py-1 text-xs font-bold ${badge(student.lmsStatus)}`}>
-                              {student.lmsStatus}
-                            </span>
-                          </td>
-                          <td
-                            className={`p-3 text-right font-bold ${
-                              student.outstanding > 0 ? "text-red-600" : "text-emerald-700"
-                            }`}
-                          >
-                            {money(student.outstanding)}
-                          </td>
-                          <td className="p-3 text-right">
-                            <Button
-                              className="rounded-full border border-slate-200 bg-white px-4 py-1 text-xs hover:bg-slate-50"
-                              onClick={() => openStudent(student)}
-                            >
-                              Open
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <StudentTable students={paginated} openStudent={openStudent} />
 
                 <div className="flex justify-end gap-3 mt-4">
-                  <Button
-                    className="rounded-full border border-slate-200 bg-white px-5 py-2 disabled:opacity-40"
-                    disabled={page === 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
+                  <Button className="rounded-full border border-slate-200 bg-white px-5 py-2 disabled:opacity-40" disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
                     Previous
                   </Button>
-
-                  <Button
-                    className="rounded-full border border-slate-200 bg-white px-5 py-2 disabled:opacity-40"
-                    disabled={page === totalPages}
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  >
+                  <Button className="rounded-full border border-slate-200 bg-white px-5 py-2 disabled:opacity-40" disabled={page === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
                     Next
                   </Button>
                 </div>
@@ -589,90 +511,167 @@ export default function App() {
         </Card>
       </main>
 
-      {selectedStudent && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
-          <div className="bg-white w-full max-w-3xl rounded-3xl p-6 shadow-xl relative max-h-[85vh] overflow-y-auto">
-            <button
-              onClick={closeStudentModal}
-              className="absolute top-4 right-4 text-slate-500 hover:text-black"
-            >
-              ✕
-            </button>
-
-            <div className="mb-5">
-              <p className="text-sm text-slate-500">Student Details</p>
-              <h2 className="text-2xl font-bold text-slate-900">{selectedStudent.name}</h2>
-              <p className="text-sm text-slate-500">
-                {selectedStudent.id} · {selectedStudent.ic}
-              </p>
-            </div>
-
-            {detailLoading ? (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center text-slate-500">
-                Loading student details...
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  <InfoCard title="Programme" value={selectedStudent.program} />
-                  <InfoCard title="Intake" value={selectedStudent.intake} />
-                  <InfoCard title="Category" value={selectedStudent.category} />
-                  <InfoCard title="PIC" value={selectedStudent.pic} />
-                  <InfoCard title="LMS Status" value={selectedStudent.lmsStatus} />
-                  <InfoCard
-                    title="Outstanding"
-                    value={money(selectedStudent.outstanding)}
-                    danger={selectedStudent.outstanding > 0}
-                  />
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-bold text-lg">Subject Progress</h3>
-                    <span className="rounded-full bg-blue-100 text-blue-700 px-3 py-1 text-xs font-bold">
-                      Live detail
-                    </span>
-                  </div>
-
-                  {!studentDetail?.subjects?.length ? (
-                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-slate-500">
-                      No subject data found.
-                    </div>
-                  ) : (
-                    <div className="overflow-hidden rounded-2xl border border-slate-200">
-                      <table className="w-full text-sm">
-                        <thead className="bg-slate-50 text-slate-600">
-                          <tr>
-                            <th className="text-left p-3">No.</th>
-                            <th className="text-left p-3">Subject</th>
-                            <th className="text-right p-3">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {studentDetail.subjects.map((sub, i) => (
-                            <tr key={`${sub.subjectCode}-${i}`} className="border-t border-slate-200">
-                              <td className="p-3 text-slate-500">{i + 1}</td>
-                              <td className="p-3">
-                                <p className="font-semibold text-slate-900">{sub.subjectCode}</p>
-                                <p className="text-xs text-slate-500">{sub.subjectName}</p>
-                              </td>
-                              <td className="p-3 text-right">
-                                <span className={`rounded-full px-3 py-1 text-xs font-bold ${badge(sub.status)}`}>
-                                  {sub.status}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+      {showNewStudent && (
+        <AddStudentModal
+          newStudent={newStudent}
+          updateNewStudent={updateNewStudent}
+          submitNewStudent={submitNewStudent}
+          close={() => setShowNewStudent(false)}
+          programmes={programmes}
+          categories={categories}
+          getFeeGroupsByProgram={getFeeGroupsByProgram}
+          saving={savingStudent}
+        />
       )}
+
+      {selectedStudent && (
+        <StudentDetailModal
+          selectedStudent={selectedStudent}
+          studentDetail={studentDetail}
+          detailLoading={detailLoading}
+          closeStudentModal={closeStudentModal}
+        />
+      )}
+    </div>
+  );
+}
+
+function StudentTable({ students, openStudent }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <table className="w-full text-sm">
+        <thead className="bg-slate-50 text-slate-600">
+          <tr>
+            <th className="text-left p-3">Student</th>
+            <th className="text-left p-3">Programme</th>
+            <th className="text-left p-3">Category</th>
+            <th className="text-left p-3">PIC</th>
+            <th className="text-left p-3">LMS</th>
+            <th className="text-right p-3">Outstanding</th>
+            <th className="text-right p-3">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {students.map((student) => (
+            <tr key={student.id} className="border-t border-slate-200 hover:bg-slate-50">
+              <td className="p-3">
+                <p className="font-semibold text-slate-900">{student.name}</p>
+                <p className="text-xs text-slate-500">{student.id} · {student.ic} · {student.intake}</p>
+              </td>
+              <td className="p-3"><Pill>{student.program}</Pill></td>
+              <td className="p-3"><span className={`rounded-full px-3 py-1 text-xs font-bold ${badge(student.category)}`}>{student.category}</span></td>
+              <td className="p-3 text-slate-600">{student.pic}</td>
+              <td className="p-3"><span className={`rounded-full px-3 py-1 text-xs font-bold ${badge(student.lmsStatus)}`}>{student.lmsStatus}</span></td>
+              <td className={`p-3 text-right font-bold ${student.outstanding > 0 ? "text-red-600" : "text-emerald-700"}`}>{money(student.outstanding)}</td>
+              <td className="p-3 text-right">
+                <Button className="rounded-full border border-slate-200 bg-white px-4 py-1 text-xs hover:bg-slate-50" onClick={() => openStudent(student)}>
+                  Open
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function AddStudentModal({ newStudent, updateNewStudent, submitNewStudent, close, programmes, categories, getFeeGroupsByProgram, saving }) {
+  const feeGroups = getFeeGroupsByProgram(newStudent.program);
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+      <div className="bg-white w-full max-w-4xl rounded-3xl p-6 shadow-xl relative">
+        <button onClick={close} className="absolute top-4 right-4 text-slate-500 hover:text-black">✕</button>
+
+        <div className="mb-5">
+          <p className="text-sm text-slate-500">Registrar Office</p>
+          <h2 className="text-2xl font-bold">Add New Student</h2>
+          <p className="text-sm text-slate-500">PIC coordinator will be notified after submission.</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <ModalField label="Student ID" value={newStudent.studentId} onChange={(v) => updateNewStudent("studentId", v)} />
+          <ModalField label="Student Name" value={newStudent.studentName} onChange={(v) => updateNewStudent("studentName", v)} />
+          <ModalField label="IC / Passport" value={newStudent.icPassport} onChange={(v) => updateNewStudent("icPassport", v)} />
+
+          <ModalSelect label="Programme" value={newStudent.program} onChange={(v) => updateNewStudent("program", v)} options={programmes} />
+          <ModalField label="Intake" value={newStudent.intake} onChange={(v) => updateNewStudent("intake", v)} placeholder="Jan 2026" />
+          <ModalSelect label="Student Category" value={newStudent.studentCategory} onChange={(v) => updateNewStudent("studentCategory", v)} options={categories} />
+
+          <ModalSelect label="Fee Group" value={newStudent.feeGroup} onChange={(v) => updateNewStudent("feeGroup", v)} options={feeGroups.map((f) => f["Fee Group"])} />
+          <ModalField label="Assigned PIC" value={newStudent.assignedPic} readOnly />
+          <ModalField label="LMS Status" value="Pending Update" readOnly />
+        </div>
+
+        <div className="flex justify-end gap-3 mt-6">
+          <Button className="rounded-full border border-slate-200 bg-white px-5 py-2" onClick={close}>Cancel</Button>
+          <Button className="rounded-full bg-slate-900 text-white px-5 py-2 disabled:opacity-40" onClick={submitNewStudent} disabled={saving}>
+            {saving ? "Saving..." : "Save Student"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StudentDetailModal({ selectedStudent, studentDetail, detailLoading, closeStudentModal }) {
+  const subjects = studentDetail?.subjects || [];
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+      <div className="bg-white w-full max-w-3xl rounded-3xl p-6 shadow-xl relative max-h-[85vh] overflow-y-auto">
+        <button onClick={closeStudentModal} className="absolute top-4 right-4 text-slate-500 hover:text-black">✕</button>
+
+        <div className="mb-5">
+          <p className="text-sm text-slate-500">Student Details</p>
+          <h2 className="text-2xl font-bold text-slate-900">{selectedStudent.name}</h2>
+          <p className="text-sm text-slate-500">{selectedStudent.id} · {selectedStudent.ic}</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <InfoCard title="Programme" value={selectedStudent.program} />
+          <InfoCard title="Intake" value={selectedStudent.intake} />
+          <InfoCard title="Category" value={selectedStudent.category} />
+          <InfoCard title="PIC" value={selectedStudent.pic} />
+          <InfoCard title="LMS Status" value={selectedStudent.lmsStatus} />
+          <InfoCard title="Outstanding" value={money(selectedStudent.outstanding)} danger={selectedStudent.outstanding > 0} />
+        </div>
+
+        <h3 className="font-bold text-lg mb-3">Subject Progress</h3>
+
+        {detailLoading ? (
+          <EmptyState text="Loading student details..." />
+        ) : !subjects.length ? (
+          <EmptyState text="No subject data found." />
+        ) : (
+          <div className="overflow-hidden rounded-2xl border border-slate-200">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-slate-600">
+                <tr>
+                  <th className="text-left p-3">No.</th>
+                  <th className="text-left p-3">Subject</th>
+                  <th className="text-right p-3">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {subjects.map((sub, i) => (
+                  <tr key={`${sub.subjectCode}-${i}`} className="border-t border-slate-200">
+                    <td className="p-3 text-slate-500">{i + 1}</td>
+                    <td className="p-3">
+                      <p className="font-semibold">{sub.subjectCode}</p>
+                      <p className="text-xs text-slate-500">{sub.subjectName}</p>
+                    </td>
+                    <td className="p-3 text-right">
+                      <span className={`rounded-full px-3 py-1 text-xs font-bold ${badge(sub.status)}`}>{sub.status}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -682,9 +681,7 @@ function Stat({ title, value, danger }) {
     <Card className="rounded-3xl border border-slate-200 bg-white shadow-md hover:shadow-lg transition">
       <CardContent className="p-5">
         <p className="text-xs text-slate-500">{title}</p>
-        <p className={`mt-2 text-xl font-bold ${danger ? "text-red-600" : "text-slate-900"}`}>
-          {value}
-        </p>
+        <p className={`mt-2 text-xl font-bold ${danger ? "text-red-600" : "text-slate-900"}`}>{value}</p>
       </CardContent>
     </Card>
   );
@@ -709,22 +706,33 @@ function BreakdownRow({ item }) {
   );
 }
 
-function Field({ label, placeholder }) {
+function ModalField({ label, value, onChange, placeholder, readOnly }) {
   return (
     <div>
       <label className="text-xs text-slate-500">{label}</label>
-      <Input placeholder={placeholder || ""} className="mt-1" />
+      <Input
+        value={value || ""}
+        onChange={(e) => onChange?.(e.target.value)}
+        placeholder={placeholder || ""}
+        readOnly={readOnly}
+        className={`mt-1 ${readOnly ? "bg-slate-50" : ""}`}
+      />
     </div>
   );
 }
 
-function SelectField({ label, options }) {
+function ModalSelect({ label, value, onChange, options }) {
   return (
     <div>
       <label className="text-xs text-slate-500">{label}</label>
-      <select className="w-full mt-1 rounded-xl border border-slate-200 px-3 py-2 bg-white">
-        {options.map((opt) => (
-          <option key={opt}>{opt}</option>
+      <select
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full mt-1 rounded-xl border border-slate-200 px-3 py-2 bg-white"
+      >
+        <option value="">Select</option>
+        {(options || []).map((opt) => (
+          <option key={opt} value={opt}>{opt}</option>
         ))}
       </select>
     </div>
@@ -735,9 +743,23 @@ function InfoCard({ title, value, danger }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
       <p className="text-xs text-slate-500">{title}</p>
-      <p className={`mt-1 font-bold ${danger ? "text-red-600" : "text-slate-900"}`}>
-        {value || "-"}
-      </p>
+      <p className={`mt-1 font-bold ${danger ? "text-red-600" : "text-slate-900"}`}>{value || "-"}</p>
     </div>
+  );
+}
+
+function EmptyState({ text }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-slate-500">
+      {text}
+    </div>
+  );
+}
+
+function Pill({ children }) {
+  return (
+    <span className="rounded-full bg-blue-100 text-blue-700 px-3 py-1 text-xs font-bold">
+      {children}
+    </span>
   );
 }

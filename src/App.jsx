@@ -124,7 +124,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center text-slate-700 font-semibold">
         Loading RO Portal...
       </div>
     );
@@ -132,29 +132,37 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100">
-      <div className="bg-gradient-to-r from-slate-950 to-blue-950 text-white">
-        <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="bg-gradient-to-r from-slate-950 via-blue-950 to-slate-900 text-white">
+        <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <p className="text-sm text-blue-100">Innovative University College</p>
-            <h1 className="text-2xl font-bold">Registrar Master Admin Portal</h1>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+              Registrar Master Admin Portal
+            </h1>
             <p className="text-sm text-blue-100">
               Full postgraduate access: MBA, MBM, MHUM, PhD and all programmes
             </p>
           </div>
 
           <div className="flex gap-3">
-            <Button variant="secondary" className="rounded-2xl" onClick={() => setShowNewStudent(true)}>
+            <Button
+              className="rounded-full bg-white text-slate-900 hover:bg-blue-50 px-5"
+              onClick={() => setShowNewStudent(true)}
+            >
               + Add New Student
             </Button>
-            <Button variant="secondary" className="rounded-2xl" onClick={loadStudents}>
+            <Button
+              className="rounded-full bg-white text-slate-900 hover:bg-blue-50 px-5"
+              onClick={loadStudents}
+            >
               Refresh Data
             </Button>
           </div>
         </div>
       </div>
 
-      <main className="max-w-7xl mx-auto p-6 space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <main className="max-w-6xl mx-auto px-6 py-8 space-y-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <Stat title="Total Students" value={summary.total} />
           <Stat title="Total Collected" value={money(summary.collected)} />
           <Stat title="Total Outstanding" value={money(summary.outstanding)} danger={summary.outstanding > 0} />
@@ -163,9 +171,9 @@ export default function App() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="rounded-3xl shadow-sm">
-            <CardContent className="p-5">
-              <h2 className="font-bold text-lg mb-4">Summary by Programme</h2>
+          <Card className="rounded-3xl border border-slate-200 bg-white shadow-md">
+            <CardContent className="p-6">
+              <h2 className="font-bold text-lg mb-5">Summary by Programme</h2>
               <div className="space-y-3">
                 {summary.byProgram.map((item) => (
                   <BreakdownRow key={item.label} item={item} />
@@ -174,9 +182,9 @@ export default function App() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-3xl shadow-sm">
-            <CardContent className="p-5">
-              <h2 className="font-bold text-lg mb-4">Summary by Student Category</h2>
+          <Card className="rounded-3xl border border-slate-200 bg-white shadow-md">
+            <CardContent className="p-6">
+              <h2 className="font-bold text-lg mb-5">Summary by Student Category</h2>
               <div className="space-y-3">
                 {summary.byCategory.map((item) => (
                   <BreakdownRow key={item.label} item={item} />
@@ -186,21 +194,21 @@ export default function App() {
           </Card>
         </div>
 
-        <Card className="rounded-3xl shadow-sm">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between mb-4">
+        <Card className="rounded-3xl border border-slate-200 bg-white shadow-md">
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between gap-4 mb-5">
               <div>
                 <h2 className="font-bold text-lg">Current Subject Offering</h2>
                 <p className="text-sm text-slate-500">
                   Subjects currently marked as Ongoing across all postgraduate programmes.
                 </p>
               </div>
-              <span className="rounded-full bg-blue-100 text-blue-700 px-3 py-1 text-xs font-bold">
+              <span className="rounded-full bg-blue-100 text-blue-700 px-4 py-1 text-xs font-bold">
                 Live from progress data
               </span>
             </div>
 
-            <div className="overflow-hidden rounded-2xl border bg-white">
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-slate-600">
                   <tr>
@@ -218,7 +226,7 @@ export default function App() {
                     </tr>
                   ) : (
                     summary.currentOfferings.map((item) => (
-                      <tr key={`${item.program}-${item.subject}`} className="border-t hover:bg-slate-50">
+                      <tr key={`${item.program}-${item.subject}`} className="border-t border-slate-200 hover:bg-slate-50">
                         <td className="p-3">
                           <span className="rounded-full bg-blue-100 text-blue-700 px-3 py-1 text-xs font-bold">
                             {item.program}
@@ -236,7 +244,7 @@ export default function App() {
         </Card>
 
         {showNewStudent && (
-          <Card className="rounded-3xl shadow-sm border-blue-200">
+          <Card className="rounded-3xl border border-blue-200 bg-white shadow-md">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <div>
@@ -245,7 +253,7 @@ export default function App() {
                     UI ready. Backend save + email notification PIC akan kita connect next.
                   </p>
                 </div>
-                <Button variant="outline" className="rounded-xl" onClick={() => setShowNewStudent(false)}>
+                <Button className="rounded-full border border-slate-200 bg-white px-5" onClick={() => setShowNewStudent(false)}>
                   Close
                 </Button>
               </div>
@@ -260,17 +268,12 @@ export default function App() {
                 <Field label="Fee Group" placeholder="MBA_FULL" />
                 <Field label="Assigned PIC" placeholder="MBA Coordinator" />
               </div>
-
-              <div className="mt-5 rounded-2xl bg-slate-50 border p-4 text-sm text-slate-600">
-                <b>Next backend:</b> save into STUDENT_MASTER, initialize subjects, set payment RM0,
-                and email assigned PIC.
-              </div>
             </CardContent>
           </Card>
         )}
 
-        <Card className="rounded-3xl shadow-sm">
-          <CardContent className="p-5">
+        <Card className="rounded-3xl border border-slate-200 bg-white shadow-md">
+          <CardContent className="p-6">
             <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between mb-5">
               <div>
                 <h2 className="font-bold text-xl">All Postgraduate Students</h2>
@@ -289,7 +292,7 @@ export default function App() {
                 <select
                   value={programFilter}
                   onChange={(e) => setProgramFilter(e.target.value)}
-                  className="rounded-xl border p-2 bg-white"
+                  className="rounded-xl border border-slate-200 px-3 py-2 bg-white"
                 >
                   {["All", ...programmes].map((p) => (
                     <option key={p}>{p}</option>
@@ -298,7 +301,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-2xl border bg-white">
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-slate-600">
                   <tr>
@@ -314,7 +317,7 @@ export default function App() {
 
                 <tbody>
                   {filtered.map((student) => (
-                    <tr key={student.id} className="border-t hover:bg-slate-50">
+                    <tr key={student.id} className="border-t border-slate-200 hover:bg-slate-50">
                       <td className="p-3">
                         <p className="font-semibold text-slate-900">{student.name}</p>
                         <p className="text-xs text-slate-500">
@@ -341,7 +344,7 @@ export default function App() {
                         {money(student.outstanding)}
                       </td>
                       <td className="p-3 text-right">
-                        <Button variant="outline" className="rounded-xl text-xs">
+                        <Button className="rounded-full border border-slate-200 bg-white px-4 py-1 text-xs hover:bg-slate-50">
                           Open
                         </Button>
                       </td>
@@ -359,10 +362,10 @@ export default function App() {
 
 function Stat({ title, value, danger }) {
   return (
-    <Card className="rounded-3xl shadow-sm hover:shadow-md transition">
+    <Card className="rounded-3xl border border-slate-200 bg-white shadow-md hover:shadow-lg transition">
       <CardContent className="p-5">
         <p className="text-xs text-slate-500">{title}</p>
-        <p className={`mt-1 text-xl font-bold ${danger ? "text-red-600" : "text-slate-900"}`}>
+        <p className={`mt-2 text-xl font-bold ${danger ? "text-red-600" : "text-slate-900"}`}>
           {value}
         </p>
       </CardContent>
@@ -372,7 +375,7 @@ function Stat({ title, value, danger }) {
 
 function BreakdownRow({ item }) {
   return (
-    <div className="rounded-2xl border bg-white p-4 hover:bg-slate-50 hover:border-blue-300 transition">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 hover:bg-slate-50 transition">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="font-bold text-slate-900">{item.label}</p>
@@ -402,7 +405,7 @@ function SelectField({ label, options }) {
   return (
     <div>
       <label className="text-xs text-slate-500">{label}</label>
-      <select className="w-full mt-1 rounded-xl border p-2 bg-white">
+      <select className="w-full mt-1 rounded-xl border border-slate-200 px-3 py-2 bg-white">
         {options.map((opt) => (
           <option key={opt}>{opt}</option>
         ))}

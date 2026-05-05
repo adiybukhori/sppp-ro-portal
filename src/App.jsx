@@ -6,6 +6,7 @@ import { Input } from "./components/ui/input.jsx";
 const API_URL =
   "https://script.google.com/macros/s/AKfycbwEfPGjZv2r8hsYPW7C5nz6LVeuAQ_jZ66e2_tYITASlqre8yiMXeCO5ol6bbBsUNfB/exec";
 
+const STUDENT_PORTAL_URL = "https://sppp-portal.vercel.app/";
 const PAGE_SIZE = 50;
 
 function money(n) {
@@ -38,10 +39,6 @@ function normalizeStudent(raw) {
     outstanding: Number(raw.Outstanding || 0),
     paymentStatus: raw["Payment Status"] || "",
     studentPortalLink: raw["Student Portal Link"] || "",
-    lmsLink: raw["LMS Link"] || "",
-    paymentLink: raw["Payment Link"] || "",
-    complaintFormLink: raw["Complaint Form Link"] || "",
-    whatsAppPic: raw["WhatsApp PIC"] || "",
     subjects: raw.subjects || [],
   };
 }
@@ -60,6 +57,7 @@ const emptyNewStudent = {
 export default function App() {
   const [students, setStudents] = useState([]);
   const [lookup, setLookup] = useState({ feeMaster: [], picUsers: [] });
+  const [currentOfferings, setCurrentOfferings] = useState([]);
 
   const [draftSearch, setDraftSearch] = useState("");
   const [draftProgramFilter, setDraftProgramFilter] = useState("All");
@@ -89,10 +87,51 @@ export default function App() {
     const data = await res.json();
 
     if (data.success) {
-      setStudents((data.students || []).map(normalizeStudent));
+      const normalized = (data.students || []).map(normalizeStudent);
+      setStudents(normalized);
+      loadCurrentOfferings(normalized);
     }
 
     setLoading(false);
+  }
+
+  async function loadCurrentOfferings(studentList) {
+    try {
+      const details = await Promise.all(
+        studentList.map(async (s) => {
+          const res = await fetch(
+            `${API_URL}?action=getStudentDetail&studentId=${encodeURIComponent(s.id)}`
+          );
+          const data = await res.json();
+          return data.success ? { student: s, subjects: data.student.subjects || [] } : null;
+        })
+      );
+
+      const offeringMap = {};
+
+      details.filter(Boolean).forEach(({ student, subjects }) => {
+        subjects.forEach((subject) => {
+          if (String(subject.status || "").toLowerCase() !== "ongoing") return;
+
+          const key = `${student.program}|${subject.subjectCode}|${subject.subjectName}`;
+
+          if (!offeringMap[key]) {
+            offeringMap[key] = {
+              program: student.program,
+              subject: `${subject.subjectCode} ${subject.subjectName}`,
+              total: 0,
+            };
+          }
+
+          offeringMap[key].total += 1;
+        });
+      });
+
+      setCurrentOfferings(Object.values(offeringMap).sort((a, b) => b.total - a.total));
+    } catch (err) {
+      console.error(err);
+      setCurrentOfferings([]);
+    }
   }
 
   async function loadLookup() {
@@ -130,24 +169,19 @@ export default function App() {
     setDraftProgramFilter("All");
     setDraftCategoryFilter("All");
     setDraftLmsFilter("All");
-
     setAppliedSearch("");
     setAppliedProgramFilter("All");
     setAppliedCategoryFilter("All");
     setAppliedLmsFilter("All");
-
     setFilterApplied(false);
     setPage(1);
   }
 
   const filtered = filterApplied
     ? students.filter((s) => {
-        const matchProgram =
-          appliedProgramFilter === "All" || s.program === appliedProgramFilter;
-        const matchCategory =
-          appliedCategoryFilter === "All" || s.category === appliedCategoryFilter;
-        const matchLms =
-          appliedLmsFilter === "All" || s.lmsStatus === appliedLmsFilter;
+        const matchProgram = appliedProgramFilter === "All" || s.program === appliedProgramFilter;
+        const matchCategory = appliedCategoryFilter === "All" || s.category === appliedCategoryFilter;
+        const matchLms = appliedLmsFilter === "All" || s.lmsStatus === appliedLmsFilter;
         const keyword = `${s.name} ${s.id} ${s.ic} ${s.program} ${s.intake}`.toLowerCase();
 
         return (
@@ -188,6 +222,14 @@ export default function App() {
     setDetailLoading(false);
   }
 
+  function openStudentProfile(student) {
+    window.open(
+      `${STUDENT_PORTAL_URL}?studentId=${encodeURIComponent(student.id)}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
   function exportCSV() {
     if (!filtered.length) {
       alert("No filtered data to export.");
@@ -225,14 +267,10 @@ export default function App() {
     ]);
 
     const csv = [headers, ...rows]
-      .map((row) =>
-        row.map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(",")
-      )
+      .map((row) => row.map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(","))
       .join("\n");
 
-    const blob = new Blob(["\uFEFF" + csv], {
-      type: "text/csv;charset=utf-8;",
-    });
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
 
     const filterName =
       appliedProgramFilter !== "All"
@@ -448,6 +486,51 @@ export default function App() {
 
         <Card className="rounded-3xl border border-slate-200 bg-white shadow-md">
           <CardContent className="p-6">
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <div>
+                <h2 className="font-bold text-lg">Current Subject Offering</h2>
+                <p className="text-sm text-slate-500">
+                  Subjects currently marked as Ongoing across all postgraduate programmes.
+                </p>
+              </div>
+              <span className="rounded-full bg-blue-100 text-blue-700 px-4 py-1 text-xs font-bold">
+                Live from progress data
+              </span>
+            </div>
+
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-slate-600">
+                  <tr>
+                    <th className="text-left p-3">Programme</th>
+                    <th className="text-left p-3">Subject Currently Offered</th>
+                    <th className="text-right p-3">Students Ongoing</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentOfferings.length === 0 ? (
+                    <tr>
+                      <td colSpan="3" className="p-4 text-slate-500">
+                        No ongoing subject found.
+                      </td>
+                    </tr>
+                  ) : (
+                    currentOfferings.map((item) => (
+                      <tr key={`${item.program}-${item.subject}`} className="border-t border-slate-200 hover:bg-slate-50">
+                        <td className="p-3"><Pill>{item.program}</Pill></td>
+                        <td className="p-3 font-semibold text-slate-900">{item.subject}</td>
+                        <td className="p-3 text-right font-bold">{item.total}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-3xl border border-slate-200 bg-white shadow-md">
+          <CardContent className="p-6">
             <div className="flex flex-col gap-4 mb-5">
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                 <div>
@@ -475,40 +558,18 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <Input
-                  value={draftSearch}
-                  onChange={(e) => setDraftSearch(e.target.value)}
-                  placeholder="Search name / ID / IC"
-                />
+                <Input value={draftSearch} onChange={(e) => setDraftSearch(e.target.value)} placeholder="Search name / ID / IC" />
 
-                <select
-                  value={draftProgramFilter}
-                  onChange={(e) => setDraftProgramFilter(e.target.value)}
-                  className="rounded-xl border border-slate-200 px-3 py-2 bg-white"
-                >
-                  {["All", ...programmes].map((p) => (
-                    <option key={p}>{p}</option>
-                  ))}
+                <select value={draftProgramFilter} onChange={(e) => setDraftProgramFilter(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 bg-white">
+                  {["All", ...programmes].map((p) => <option key={p}>{p}</option>)}
                 </select>
 
-                <select
-                  value={draftCategoryFilter}
-                  onChange={(e) => setDraftCategoryFilter(e.target.value)}
-                  className="rounded-xl border border-slate-200 px-3 py-2 bg-white"
-                >
-                  {["All", ...categories].map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
+                <select value={draftCategoryFilter} onChange={(e) => setDraftCategoryFilter(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 bg-white">
+                  {["All", ...categories].map((c) => <option key={c}>{c}</option>)}
                 </select>
 
-                <select
-                  value={draftLmsFilter}
-                  onChange={(e) => setDraftLmsFilter(e.target.value)}
-                  className="rounded-xl border border-slate-200 px-3 py-2 bg-white"
-                >
-                  {["All", ...lmsStatuses].map((l) => (
-                    <option key={l}>{l}</option>
-                  ))}
+                <select value={draftLmsFilter} onChange={(e) => setDraftLmsFilter(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 bg-white">
+                  {["All", ...lmsStatuses].map((l) => <option key={l}>{l}</option>)}
                 </select>
               </div>
             </div>
@@ -520,28 +581,17 @@ export default function App() {
             ) : (
               <>
                 <div className="mb-3 flex items-center justify-between text-sm text-slate-500">
-                  <p>
-                    Showing {startIndex + 1}–{Math.min(startIndex + PAGE_SIZE, filtered.length)} of{" "}
-                    {filtered.length} record(s)
-                  </p>
+                  <p>Showing {startIndex + 1}–{Math.min(startIndex + PAGE_SIZE, filtered.length)} of {filtered.length} record(s)</p>
                   <p>Page {page} of {totalPages}</p>
                 </div>
 
                 <StudentTable students={paginated} openStudent={openStudent} />
 
                 <div className="flex justify-end gap-3 mt-4">
-                  <Button
-                    className="rounded-full border border-slate-200 bg-white px-5 py-2 disabled:opacity-40"
-                    disabled={page === 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
+                  <Button className="rounded-full border border-slate-200 bg-white px-5 py-2 disabled:opacity-40" disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
                     Previous
                   </Button>
-                  <Button
-                    className="rounded-full border border-slate-200 bg-white px-5 py-2 disabled:opacity-40"
-                    disabled={page === totalPages}
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  >
+                  <Button className="rounded-full border border-slate-200 bg-white px-5 py-2 disabled:opacity-40" disabled={page === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
                     Next
                   </Button>
                 </div>
@@ -570,6 +620,7 @@ export default function App() {
           studentDetail={studentDetail}
           detailLoading={detailLoading}
           closeStudentModal={closeStudentModal}
+          openStudentProfile={openStudentProfile}
         />
       )}
     </div>
@@ -596,30 +647,15 @@ function StudentTable({ students, openStudent }) {
             <tr key={student.id} className="border-t border-slate-200 hover:bg-slate-50">
               <td className="p-3">
                 <p className="font-semibold text-slate-900">{student.name}</p>
-                <p className="text-xs text-slate-500">
-                  {student.id} · {student.ic} · {student.intake}
-                </p>
+                <p className="text-xs text-slate-500">{student.id} · {student.ic} · {student.intake}</p>
               </td>
               <td className="p-3"><Pill>{student.program}</Pill></td>
-              <td className="p-3">
-                <span className={`rounded-full px-3 py-1 text-xs font-bold ${badge(student.category)}`}>
-                  {student.category}
-                </span>
-              </td>
+              <td className="p-3"><span className={`rounded-full px-3 py-1 text-xs font-bold ${badge(student.category)}`}>{student.category}</span></td>
               <td className="p-3 text-slate-600">{student.pic}</td>
-              <td className="p-3">
-                <span className={`rounded-full px-3 py-1 text-xs font-bold ${badge(student.lmsStatus)}`}>
-                  {student.lmsStatus}
-                </span>
-              </td>
-              <td className={`p-3 text-right font-bold ${student.outstanding > 0 ? "text-red-600" : "text-emerald-700"}`}>
-                {money(student.outstanding)}
-              </td>
+              <td className="p-3"><span className={`rounded-full px-3 py-1 text-xs font-bold ${badge(student.lmsStatus)}`}>{student.lmsStatus}</span></td>
+              <td className={`p-3 text-right font-bold ${student.outstanding > 0 ? "text-red-600" : "text-emerald-700"}`}>{money(student.outstanding)}</td>
               <td className="p-3 text-right">
-                <Button
-                  className="rounded-full border border-slate-200 bg-white px-4 py-1 text-xs hover:bg-slate-50"
-                  onClick={() => openStudent(student)}
-                >
+                <Button className="rounded-full border border-slate-200 bg-white px-4 py-1 text-xs hover:bg-slate-50" onClick={() => openStudent(student)}>
                   Open
                 </Button>
               </td>
@@ -631,13 +667,8 @@ function StudentTable({ students, openStudent }) {
   );
 }
 
-function StudentDetailModal({ selectedStudent, studentDetail, detailLoading, closeStudentModal }) {
+function StudentDetailModal({ selectedStudent, studentDetail, detailLoading, closeStudentModal, openStudentProfile }) {
   const subjects = studentDetail?.subjects || [];
-
-  function openLink(url) {
-    if (!url) return;
-    window.open(url, "_blank", "noopener,noreferrer");
-  }
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
@@ -649,37 +680,14 @@ function StudentDetailModal({ selectedStudent, studentDetail, detailLoading, clo
             <p className="text-sm text-slate-500">{selectedStudent.id} · {selectedStudent.ic}</p>
           </div>
 
-          <Button
-            className="rounded-full border border-slate-200 bg-white px-5 py-2"
-            onClick={closeStudentModal}
-          >
+          <Button className="rounded-full border border-slate-200 bg-white px-5 py-2" onClick={closeStudentModal}>
             Close
           </Button>
         </div>
 
         <div className="flex flex-wrap gap-3 mb-6">
-          <Button
-            className="rounded-full bg-slate-900 text-white px-5 py-2 disabled:opacity-40"
-            disabled={!selectedStudent.studentPortalLink}
-            onClick={() => openLink(selectedStudent.studentPortalLink)}
-          >
+          <Button className="rounded-full bg-slate-900 text-white px-5 py-2" onClick={() => openStudentProfile(selectedStudent)}>
             View Student Profile
-          </Button>
-
-          <Button
-            className="rounded-full border border-slate-200 bg-white px-5 py-2 disabled:opacity-40"
-            disabled={!selectedStudent.lmsLink}
-            onClick={() => openLink(selectedStudent.lmsLink)}
-          >
-            Open LMS
-          </Button>
-
-          <Button
-            className="rounded-full border border-slate-200 bg-white px-5 py-2 disabled:opacity-40"
-            disabled={!selectedStudent.paymentLink}
-            onClick={() => openLink(selectedStudent.paymentLink)}
-          >
-            Payment Link
           </Button>
         </div>
 

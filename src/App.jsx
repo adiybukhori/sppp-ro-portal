@@ -51,6 +51,10 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
 
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [studentDetail, setStudentDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
   async function loadStudents() {
     setLoading(true);
     const res = await fetch(`${API_URL}?action=getStudents`);
@@ -61,6 +65,36 @@ export default function App() {
     }
 
     setLoading(false);
+  }
+
+  async function openStudent(student) {
+    setSelectedStudent(student);
+    setStudentDetail(null);
+    setDetailLoading(true);
+
+    try {
+      const res = await fetch(
+        `${API_URL}?action=getStudentDetail&studentId=${encodeURIComponent(student.id)}`
+      );
+      const data = await res.json();
+
+      if (data.success) {
+        setStudentDetail(data.student);
+      } else {
+        setStudentDetail(null);
+      }
+    } catch (err) {
+      console.error(err);
+      setStudentDetail(null);
+    }
+
+    setDetailLoading(false);
+  }
+
+  function closeStudentModal() {
+    setSelectedStudent(null);
+    setStudentDetail(null);
+    setDetailLoading(false);
   }
 
   useEffect(() => {
@@ -87,6 +121,7 @@ export default function App() {
         const matchCategory = categoryFilter === "All" || s.category === categoryFilter;
         const matchLms = lmsFilter === "All" || s.lmsStatus === lmsFilter;
         const keyword = `${s.name} ${s.id} ${s.ic} ${s.program} ${s.intake}`.toLowerCase();
+
         return (
           matchProgram &&
           matchCategory &&
@@ -194,6 +229,7 @@ export default function App() {
     students.forEach((student) => {
       (student.subjects || []).forEach((subject) => {
         if (subject.status !== "Ongoing") return;
+
         const key = `${student.program}|${subject.subjectCode}|${subject.subjectName}`;
 
         if (!offeringMap[key]) {
@@ -263,7 +299,11 @@ export default function App() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <Stat title="Total Students" value={summary.total} />
           <Stat title="Total Collected" value={money(summary.collected)} />
-          <Stat title="Total Outstanding" value={money(summary.outstanding)} danger={summary.outstanding > 0} />
+          <Stat
+            title="Total Outstanding"
+            value={money(summary.outstanding)}
+            danger={summary.outstanding > 0}
+          />
           <Stat title="LMS Blocked" value={summary.blocked} danger={summary.blocked > 0} />
           <Stat title="LMS Active" value={summary.active} />
         </div>
@@ -324,7 +364,10 @@ export default function App() {
                     </tr>
                   ) : (
                     summary.currentOfferings.map((item) => (
-                      <tr key={`${item.program}-${item.subject}`} className="border-t border-slate-200 hover:bg-slate-50">
+                      <tr
+                        key={`${item.program}-${item.subject}`}
+                        className="border-t border-slate-200 hover:bg-slate-50"
+                      >
                         <td className="p-3">
                           <span className="rounded-full bg-blue-100 text-blue-700 px-3 py-1 text-xs font-bold">
                             {item.program}
@@ -340,6 +383,41 @@ export default function App() {
             </div>
           </CardContent>
         </Card>
+
+        {showNewStudent && (
+          <Card className="rounded-3xl border border-blue-200 bg-white shadow-md">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="font-bold text-xl">Add New Student</h2>
+                  <p className="text-sm text-slate-500">
+                    UI ready. Backend save + email notification PIC akan kita connect next.
+                  </p>
+                </div>
+                <Button
+                  className="rounded-full border border-slate-200 bg-white px-5 py-2"
+                  onClick={() => setShowNewStudent(false)}
+                >
+                  Close
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Field label="Student ID" placeholder="MBA26001" />
+                <Field label="Student Name" placeholder="Full name" />
+                <Field label="IC / Passport" placeholder="900101011234" />
+                <SelectField
+                  label="Programme"
+                  options={programmes.length ? programmes : ["MBA", "MBM", "MHUM", "PHD"]}
+                />
+                <Field label="Intake" placeholder="May 2026" />
+                <Field label="Student Category" placeholder="IUC / YEG / YPR" />
+                <Field label="Fee Group" placeholder="MBA_FULL" />
+                <Field label="Assigned PIC" placeholder="MBA Coordinator" />
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="rounded-3xl border border-slate-200 bg-white shadow-md">
           <CardContent className="p-6">
@@ -423,7 +501,9 @@ export default function App() {
                     Showing {startIndex + 1}–{Math.min(startIndex + PAGE_SIZE, filtered.length)} of{" "}
                     {filtered.length} record(s)
                   </p>
-                  <p>Page {page} of {totalPages}</p>
+                  <p>
+                    Page {page} of {totalPages}
+                  </p>
                 </div>
 
                 <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
@@ -465,11 +545,18 @@ export default function App() {
                               {student.lmsStatus}
                             </span>
                           </td>
-                          <td className={`p-3 text-right font-bold ${student.outstanding > 0 ? "text-red-600" : "text-emerald-700"}`}>
+                          <td
+                            className={`p-3 text-right font-bold ${
+                              student.outstanding > 0 ? "text-red-600" : "text-emerald-700"
+                            }`}
+                          >
                             {money(student.outstanding)}
                           </td>
                           <td className="p-3 text-right">
-                            <Button className="rounded-full border border-slate-200 bg-white px-4 py-1 text-xs hover:bg-slate-50">
+                            <Button
+                              className="rounded-full border border-slate-200 bg-white px-4 py-1 text-xs hover:bg-slate-50"
+                              onClick={() => openStudent(student)}
+                            >
                               Open
                             </Button>
                           </td>
@@ -501,6 +588,91 @@ export default function App() {
           </CardContent>
         </Card>
       </main>
+
+      {selectedStudent && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+          <div className="bg-white w-full max-w-3xl rounded-3xl p-6 shadow-xl relative max-h-[85vh] overflow-y-auto">
+            <button
+              onClick={closeStudentModal}
+              className="absolute top-4 right-4 text-slate-500 hover:text-black"
+            >
+              ✕
+            </button>
+
+            <div className="mb-5">
+              <p className="text-sm text-slate-500">Student Details</p>
+              <h2 className="text-2xl font-bold text-slate-900">{selectedStudent.name}</h2>
+              <p className="text-sm text-slate-500">
+                {selectedStudent.id} · {selectedStudent.ic}
+              </p>
+            </div>
+
+            {detailLoading ? (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center text-slate-500">
+                Loading student details...
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <InfoCard title="Programme" value={selectedStudent.program} />
+                  <InfoCard title="Intake" value={selectedStudent.intake} />
+                  <InfoCard title="Category" value={selectedStudent.category} />
+                  <InfoCard title="PIC" value={selectedStudent.pic} />
+                  <InfoCard title="LMS Status" value={selectedStudent.lmsStatus} />
+                  <InfoCard
+                    title="Outstanding"
+                    value={money(selectedStudent.outstanding)}
+                    danger={selectedStudent.outstanding > 0}
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-bold text-lg">Subject Progress</h3>
+                    <span className="rounded-full bg-blue-100 text-blue-700 px-3 py-1 text-xs font-bold">
+                      Live detail
+                    </span>
+                  </div>
+
+                  {!studentDetail?.subjects?.length ? (
+                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-slate-500">
+                      No subject data found.
+                    </div>
+                  ) : (
+                    <div className="overflow-hidden rounded-2xl border border-slate-200">
+                      <table className="w-full text-sm">
+                        <thead className="bg-slate-50 text-slate-600">
+                          <tr>
+                            <th className="text-left p-3">No.</th>
+                            <th className="text-left p-3">Subject</th>
+                            <th className="text-right p-3">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {studentDetail.subjects.map((sub, i) => (
+                            <tr key={`${sub.subjectCode}-${i}`} className="border-t border-slate-200">
+                              <td className="p-3 text-slate-500">{i + 1}</td>
+                              <td className="p-3">
+                                <p className="font-semibold text-slate-900">{sub.subjectCode}</p>
+                                <p className="text-xs text-slate-500">{sub.subjectName}</p>
+                              </td>
+                              <td className="p-3 text-right">
+                                <span className={`rounded-full px-3 py-1 text-xs font-bold ${badge(sub.status)}`}>
+                                  {sub.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -533,6 +705,39 @@ function BreakdownRow({ item }) {
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Field({ label, placeholder }) {
+  return (
+    <div>
+      <label className="text-xs text-slate-500">{label}</label>
+      <Input placeholder={placeholder || ""} className="mt-1" />
+    </div>
+  );
+}
+
+function SelectField({ label, options }) {
+  return (
+    <div>
+      <label className="text-xs text-slate-500">{label}</label>
+      <select className="w-full mt-1 rounded-xl border border-slate-200 px-3 py-2 bg-white">
+        {options.map((opt) => (
+          <option key={opt}>{opt}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function InfoCard({ title, value, danger }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <p className="text-xs text-slate-500">{title}</p>
+      <p className={`mt-1 font-bold ${danger ? "text-red-600" : "text-slate-900"}`}>
+        {value || "-"}
+      </p>
     </div>
   );
 }

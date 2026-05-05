@@ -37,6 +37,11 @@ function normalizeStudent(raw) {
     paidAmount: Number(raw["Paid Amount"] || 0),
     outstanding: Number(raw.Outstanding || 0),
     paymentStatus: raw["Payment Status"] || "",
+    studentPortalLink: raw["Student Portal Link"] || "",
+    lmsLink: raw["LMS Link"] || "",
+    paymentLink: raw["Payment Link"] || "",
+    complaintFormLink: raw["Complaint Form Link"] || "",
+    whatsAppPic: raw["WhatsApp PIC"] || "",
     subjects: raw.subjects || [],
   };
 }
@@ -56,10 +61,15 @@ export default function App() {
   const [students, setStudents] = useState([]);
   const [lookup, setLookup] = useState({ feeMaster: [], picUsers: [] });
 
-  const [programFilter, setProgramFilter] = useState("All");
-  const [categoryFilter, setCategoryFilter] = useState("All");
-  const [lmsFilter, setLmsFilter] = useState("All");
-  const [search, setSearch] = useState("");
+  const [draftSearch, setDraftSearch] = useState("");
+  const [draftProgramFilter, setDraftProgramFilter] = useState("All");
+  const [draftCategoryFilter, setDraftCategoryFilter] = useState("All");
+  const [draftLmsFilter, setDraftLmsFilter] = useState("All");
+
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [appliedProgramFilter, setAppliedProgramFilter] = useState("All");
+  const [appliedCategoryFilter, setAppliedCategoryFilter] = useState("All");
+  const [appliedLmsFilter, setAppliedLmsFilter] = useState("All");
   const [filterApplied, setFilterApplied] = useState(false);
 
   const [showNewStudent, setShowNewStudent] = useState(false);
@@ -97,6 +107,62 @@ export default function App() {
     }
   }
 
+  useEffect(() => {
+    loadStudents();
+    loadLookup();
+  }, []);
+
+  const programmes = [...new Set(students.map((s) => s.program).filter(Boolean))];
+  const categories = [...new Set(students.map((s) => s.category).filter(Boolean))];
+  const lmsStatuses = [...new Set(students.map((s) => s.lmsStatus).filter(Boolean))];
+
+  function applyFilter() {
+    setAppliedSearch(draftSearch);
+    setAppliedProgramFilter(draftProgramFilter);
+    setAppliedCategoryFilter(draftCategoryFilter);
+    setAppliedLmsFilter(draftLmsFilter);
+    setFilterApplied(true);
+    setPage(1);
+  }
+
+  function resetFilters() {
+    setDraftSearch("");
+    setDraftProgramFilter("All");
+    setDraftCategoryFilter("All");
+    setDraftLmsFilter("All");
+
+    setAppliedSearch("");
+    setAppliedProgramFilter("All");
+    setAppliedCategoryFilter("All");
+    setAppliedLmsFilter("All");
+
+    setFilterApplied(false);
+    setPage(1);
+  }
+
+  const filtered = filterApplied
+    ? students.filter((s) => {
+        const matchProgram =
+          appliedProgramFilter === "All" || s.program === appliedProgramFilter;
+        const matchCategory =
+          appliedCategoryFilter === "All" || s.category === appliedCategoryFilter;
+        const matchLms =
+          appliedLmsFilter === "All" || s.lmsStatus === appliedLmsFilter;
+        const keyword = `${s.name} ${s.id} ${s.ic} ${s.program} ${s.intake}`.toLowerCase();
+
+        return (
+          matchProgram &&
+          matchCategory &&
+          matchLms &&
+          keyword.includes(appliedSearch.toLowerCase())
+        );
+      })
+    : [];
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const startIndex = (page - 1) * PAGE_SIZE;
+  const paginated = filtered.slice(startIndex, startIndex + PAGE_SIZE);
+
   async function openStudent(student) {
     setSelectedStudent(student);
     setStudentDetail(null);
@@ -108,9 +174,7 @@ export default function App() {
       );
       const data = await res.json();
 
-      if (data.success) {
-        setStudentDetail(data.student);
-      }
+      if (data.success) setStudentDetail(data.student);
     } catch (err) {
       console.error(err);
     }
@@ -122,53 +186,6 @@ export default function App() {
     setSelectedStudent(null);
     setStudentDetail(null);
     setDetailLoading(false);
-  }
-
-  useEffect(() => {
-    loadStudents();
-    loadLookup();
-  }, []);
-
-  useEffect(() => {
-    setPage(1);
-  }, [search, programFilter, categoryFilter, lmsFilter]);
-
-  const programmes = [...new Set(students.map((s) => s.program).filter(Boolean))];
-  const categories = [...new Set(students.map((s) => s.category).filter(Boolean))];
-  const lmsStatuses = [...new Set(students.map((s) => s.lmsStatus).filter(Boolean))];
-
-  const filtered = filterApplied
-    ? students.filter((s) => {
-        const matchProgram = programFilter === "All" || s.program === programFilter;
-        const matchCategory = categoryFilter === "All" || s.category === categoryFilter;
-        const matchLms = lmsFilter === "All" || s.lmsStatus === lmsFilter;
-        const keyword = `${s.name} ${s.id} ${s.ic} ${s.program} ${s.intake}`.toLowerCase();
-
-        return (
-          matchProgram &&
-          matchCategory &&
-          matchLms &&
-          keyword.includes(search.toLowerCase())
-        );
-      })
-    : [];
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const startIndex = (page - 1) * PAGE_SIZE;
-  const paginated = filtered.slice(startIndex, startIndex + PAGE_SIZE);
-
-  function applyFilter() {
-    setFilterApplied(true);
-    setPage(1);
-  }
-
-  function resetFilters() {
-    setSearch("");
-    setProgramFilter("All");
-    setCategoryFilter("All");
-    setLmsFilter("All");
-    setFilterApplied(false);
-    setPage(1);
   }
 
   function exportCSV() {
@@ -218,18 +235,32 @@ export default function App() {
     });
 
     const filterName =
-      programFilter !== "All"
-        ? programFilter
-        : categoryFilter !== "All"
-        ? categoryFilter
-        : lmsFilter !== "All"
-        ? lmsFilter
+      appliedProgramFilter !== "All"
+        ? appliedProgramFilter
+        : appliedCategoryFilter !== "All"
+        ? appliedCategoryFilter
+        : appliedLmsFilter !== "All"
+        ? appliedLmsFilter
         : "All";
 
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.download = `SPPP_RO_${filterName}_Students.csv`;
     link.click();
+  }
+
+  function getPicByProgram(program) {
+    return lookup.picUsers.find(
+      (p) =>
+        String(p.Program || "").trim() === String(program || "").trim() &&
+        String(p.Role || "").trim().toUpperCase() === "PIC"
+    );
+  }
+
+  function getFeeGroupsByProgram(program) {
+    return lookup.feeMaster.filter(
+      (f) => String(f.Program || "").trim() === String(program || "").trim()
+    );
   }
 
   function openAddStudentModal() {
@@ -245,20 +276,6 @@ export default function App() {
     });
 
     setShowNewStudent(true);
-  }
-
-  function getPicByProgram(program) {
-    return lookup.picUsers.find(
-      (p) =>
-        String(p.Program || "").trim() === String(program || "").trim() &&
-        String(p.Role || "").trim().toUpperCase() === "PIC"
-    );
-  }
-
-  function getFeeGroupsByProgram(program) {
-    return lookup.feeMaster.filter(
-      (f) => String(f.Program || "").trim() === String(program || "").trim()
-    );
   }
 
   function updateNewStudent(field, value) {
@@ -441,10 +458,7 @@ export default function App() {
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                  <Button
-                    className="rounded-full bg-slate-900 text-white px-5 py-2"
-                    onClick={applyFilter}
-                  >
+                  <Button className="rounded-full bg-slate-900 text-white px-5 py-2" onClick={applyFilter}>
                     Apply Filter
                   </Button>
                   <Button
@@ -454,10 +468,7 @@ export default function App() {
                   >
                     Export CSV
                   </Button>
-                  <Button
-                    className="rounded-full border border-slate-200 bg-white px-5 py-2"
-                    onClick={resetFilters}
-                  >
+                  <Button className="rounded-full border border-slate-200 bg-white px-5 py-2" onClick={resetFilters}>
                     Reset
                   </Button>
                 </div>
@@ -465,21 +476,39 @@ export default function App() {
 
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  value={draftSearch}
+                  onChange={(e) => setDraftSearch(e.target.value)}
                   placeholder="Search name / ID / IC"
                 />
 
-                <select value={programFilter} onChange={(e) => setProgramFilter(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 bg-white">
-                  {["All", ...programmes].map((p) => <option key={p}>{p}</option>)}
+                <select
+                  value={draftProgramFilter}
+                  onChange={(e) => setDraftProgramFilter(e.target.value)}
+                  className="rounded-xl border border-slate-200 px-3 py-2 bg-white"
+                >
+                  {["All", ...programmes].map((p) => (
+                    <option key={p}>{p}</option>
+                  ))}
                 </select>
 
-                <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 bg-white">
-                  {["All", ...categories].map((c) => <option key={c}>{c}</option>)}
+                <select
+                  value={draftCategoryFilter}
+                  onChange={(e) => setDraftCategoryFilter(e.target.value)}
+                  className="rounded-xl border border-slate-200 px-3 py-2 bg-white"
+                >
+                  {["All", ...categories].map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
                 </select>
 
-                <select value={lmsFilter} onChange={(e) => setLmsFilter(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 bg-white">
-                  {["All", ...lmsStatuses].map((l) => <option key={l}>{l}</option>)}
+                <select
+                  value={draftLmsFilter}
+                  onChange={(e) => setDraftLmsFilter(e.target.value)}
+                  className="rounded-xl border border-slate-200 px-3 py-2 bg-white"
+                >
+                  {["All", ...lmsStatuses].map((l) => (
+                    <option key={l}>{l}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -491,17 +520,28 @@ export default function App() {
             ) : (
               <>
                 <div className="mb-3 flex items-center justify-between text-sm text-slate-500">
-                  <p>Showing {startIndex + 1}–{Math.min(startIndex + PAGE_SIZE, filtered.length)} of {filtered.length} record(s)</p>
+                  <p>
+                    Showing {startIndex + 1}–{Math.min(startIndex + PAGE_SIZE, filtered.length)} of{" "}
+                    {filtered.length} record(s)
+                  </p>
                   <p>Page {page} of {totalPages}</p>
                 </div>
 
                 <StudentTable students={paginated} openStudent={openStudent} />
 
                 <div className="flex justify-end gap-3 mt-4">
-                  <Button className="rounded-full border border-slate-200 bg-white px-5 py-2 disabled:opacity-40" disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                  <Button
+                    className="rounded-full border border-slate-200 bg-white px-5 py-2 disabled:opacity-40"
+                    disabled={page === 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
                     Previous
                   </Button>
-                  <Button className="rounded-full border border-slate-200 bg-white px-5 py-2 disabled:opacity-40" disabled={page === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                  <Button
+                    className="rounded-full border border-slate-200 bg-white px-5 py-2 disabled:opacity-40"
+                    disabled={page === totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
                     Next
                   </Button>
                 </div>
@@ -556,15 +596,30 @@ function StudentTable({ students, openStudent }) {
             <tr key={student.id} className="border-t border-slate-200 hover:bg-slate-50">
               <td className="p-3">
                 <p className="font-semibold text-slate-900">{student.name}</p>
-                <p className="text-xs text-slate-500">{student.id} · {student.ic} · {student.intake}</p>
+                <p className="text-xs text-slate-500">
+                  {student.id} · {student.ic} · {student.intake}
+                </p>
               </td>
               <td className="p-3"><Pill>{student.program}</Pill></td>
-              <td className="p-3"><span className={`rounded-full px-3 py-1 text-xs font-bold ${badge(student.category)}`}>{student.category}</span></td>
+              <td className="p-3">
+                <span className={`rounded-full px-3 py-1 text-xs font-bold ${badge(student.category)}`}>
+                  {student.category}
+                </span>
+              </td>
               <td className="p-3 text-slate-600">{student.pic}</td>
-              <td className="p-3"><span className={`rounded-full px-3 py-1 text-xs font-bold ${badge(student.lmsStatus)}`}>{student.lmsStatus}</span></td>
-              <td className={`p-3 text-right font-bold ${student.outstanding > 0 ? "text-red-600" : "text-emerald-700"}`}>{money(student.outstanding)}</td>
+              <td className="p-3">
+                <span className={`rounded-full px-3 py-1 text-xs font-bold ${badge(student.lmsStatus)}`}>
+                  {student.lmsStatus}
+                </span>
+              </td>
+              <td className={`p-3 text-right font-bold ${student.outstanding > 0 ? "text-red-600" : "text-emerald-700"}`}>
+                {money(student.outstanding)}
+              </td>
               <td className="p-3 text-right">
-                <Button className="rounded-full border border-slate-200 bg-white px-4 py-1 text-xs hover:bg-slate-50" onClick={() => openStudent(student)}>
+                <Button
+                  className="rounded-full border border-slate-200 bg-white px-4 py-1 text-xs hover:bg-slate-50"
+                  onClick={() => openStudent(student)}
+                >
                   Open
                 </Button>
               </td>
@@ -572,6 +627,107 @@ function StudentTable({ students, openStudent }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function StudentDetailModal({ selectedStudent, studentDetail, detailLoading, closeStudentModal }) {
+  const subjects = studentDetail?.subjects || [];
+
+  function openLink(url) {
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+      <div className="bg-white w-full max-w-3xl rounded-3xl p-6 shadow-xl relative max-h-[85vh] overflow-y-auto">
+        <div className="flex items-start justify-between gap-4 mb-5">
+          <div>
+            <p className="text-sm text-slate-500">Student Details</p>
+            <h2 className="text-2xl font-bold text-slate-900">{selectedStudent.name}</h2>
+            <p className="text-sm text-slate-500">{selectedStudent.id} · {selectedStudent.ic}</p>
+          </div>
+
+          <Button
+            className="rounded-full border border-slate-200 bg-white px-5 py-2"
+            onClick={closeStudentModal}
+          >
+            Close
+          </Button>
+        </div>
+
+        <div className="flex flex-wrap gap-3 mb-6">
+          <Button
+            className="rounded-full bg-slate-900 text-white px-5 py-2 disabled:opacity-40"
+            disabled={!selectedStudent.studentPortalLink}
+            onClick={() => openLink(selectedStudent.studentPortalLink)}
+          >
+            View Student Profile
+          </Button>
+
+          <Button
+            className="rounded-full border border-slate-200 bg-white px-5 py-2 disabled:opacity-40"
+            disabled={!selectedStudent.lmsLink}
+            onClick={() => openLink(selectedStudent.lmsLink)}
+          >
+            Open LMS
+          </Button>
+
+          <Button
+            className="rounded-full border border-slate-200 bg-white px-5 py-2 disabled:opacity-40"
+            disabled={!selectedStudent.paymentLink}
+            onClick={() => openLink(selectedStudent.paymentLink)}
+          >
+            Payment Link
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <InfoCard title="Programme" value={selectedStudent.program} />
+          <InfoCard title="Intake" value={selectedStudent.intake} />
+          <InfoCard title="Category" value={selectedStudent.category} />
+          <InfoCard title="PIC" value={selectedStudent.pic} />
+          <InfoCard title="LMS Status" value={selectedStudent.lmsStatus} />
+          <InfoCard title="Outstanding" value={money(selectedStudent.outstanding)} danger={selectedStudent.outstanding > 0} />
+        </div>
+
+        <h3 className="font-bold text-lg mb-3">Subject Progress</h3>
+
+        {detailLoading ? (
+          <EmptyState text="Loading student details..." />
+        ) : !subjects.length ? (
+          <EmptyState text="No subject data found." />
+        ) : (
+          <div className="overflow-hidden rounded-2xl border border-slate-200">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-slate-600">
+                <tr>
+                  <th className="text-left p-3">No.</th>
+                  <th className="text-left p-3">Subject</th>
+                  <th className="text-right p-3">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {subjects.map((sub, i) => (
+                  <tr key={`${sub.subjectCode}-${i}`} className="border-t border-slate-200">
+                    <td className="p-3 text-slate-500">{i + 1}</td>
+                    <td className="p-3">
+                      <p className="font-semibold">{sub.subjectCode}</p>
+                      <p className="text-xs text-slate-500">{sub.subjectName}</p>
+                    </td>
+                    <td className="p-3 text-right">
+                      <span className={`rounded-full px-3 py-1 text-xs font-bold ${badge(sub.status)}`}>
+                        {sub.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -610,67 +766,6 @@ function AddStudentModal({ newStudent, updateNewStudent, submitNewStudent, close
             {saving ? "Saving..." : "Save Student"}
           </Button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function StudentDetailModal({ selectedStudent, studentDetail, detailLoading, closeStudentModal }) {
-  const subjects = studentDetail?.subjects || [];
-
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
-      <div className="bg-white w-full max-w-3xl rounded-3xl p-6 shadow-xl relative max-h-[85vh] overflow-y-auto">
-        <button onClick={closeStudentModal} className="absolute top-4 right-4 text-slate-500 hover:text-black">✕</button>
-
-        <div className="mb-5">
-          <p className="text-sm text-slate-500">Student Details</p>
-          <h2 className="text-2xl font-bold text-slate-900">{selectedStudent.name}</h2>
-          <p className="text-sm text-slate-500">{selectedStudent.id} · {selectedStudent.ic}</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <InfoCard title="Programme" value={selectedStudent.program} />
-          <InfoCard title="Intake" value={selectedStudent.intake} />
-          <InfoCard title="Category" value={selectedStudent.category} />
-          <InfoCard title="PIC" value={selectedStudent.pic} />
-          <InfoCard title="LMS Status" value={selectedStudent.lmsStatus} />
-          <InfoCard title="Outstanding" value={money(selectedStudent.outstanding)} danger={selectedStudent.outstanding > 0} />
-        </div>
-
-        <h3 className="font-bold text-lg mb-3">Subject Progress</h3>
-
-        {detailLoading ? (
-          <EmptyState text="Loading student details..." />
-        ) : !subjects.length ? (
-          <EmptyState text="No subject data found." />
-        ) : (
-          <div className="overflow-hidden rounded-2xl border border-slate-200">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-600">
-                <tr>
-                  <th className="text-left p-3">No.</th>
-                  <th className="text-left p-3">Subject</th>
-                  <th className="text-right p-3">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {subjects.map((sub, i) => (
-                  <tr key={`${sub.subjectCode}-${i}`} className="border-t border-slate-200">
-                    <td className="p-3 text-slate-500">{i + 1}</td>
-                    <td className="p-3">
-                      <p className="font-semibold">{sub.subjectCode}</p>
-                      <p className="text-xs text-slate-500">{sub.subjectName}</p>
-                    </td>
-                    <td className="p-3 text-right">
-                      <span className={`rounded-full px-3 py-1 text-xs font-bold ${badge(sub.status)}`}>{sub.status}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
     </div>
   );

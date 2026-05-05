@@ -1,3 +1,8 @@
-export function Input(props) {
-  return <input {...props} style={{ padding: 8, width: "100%" }} />;
+export function Input({ className = "", ...props }) {
+  return (
+    <input
+      {...props}
+      className={`w-full border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`}
+    />
+  );
 }

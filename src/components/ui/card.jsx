@@ -1,6 +1,11 @@
-export function Card({ children }) {
-  return <div style={{ border: "1px solid #ddd", padding: 15 }}>{children}</div>;
+export function Card({ children, className = "" }) {
+  return (
+    <div className={`bg-white border rounded-3xl shadow-sm ${className}`}>
+      {children}
+    </div>
+  );
 }
-export function CardContent({ children }) {
-  return <div>{children}</div>;
+
+export function CardContent({ children, className = "" }) {
+  return <div className={`p-5 ${className}`}>{children}</div>;
 }

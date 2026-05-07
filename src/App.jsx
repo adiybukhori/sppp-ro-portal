@@ -484,6 +484,7 @@ export default function App() {
               danger={(dashboardSummary?.totalOutstanding ?? summary.outstanding) > 0}
             />
           </div>
+        </div>
         
           <div className="flex justify-end gap-3">
             <div className="rounded-full bg-white border border-slate-200 px-6 py-3 shadow-sm min-w-[170px]">

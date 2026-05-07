@@ -4,7 +4,7 @@ import { Button } from "./components/ui/button.jsx";
 import { Input } from "./components/ui/input.jsx";
 
 const API_URL =
-  "https://script.google.com/macros/s/AKfycbyUdL5K_IyG8kVr8lm-KR9772QQAhAZQ7GlOJswdw9ntrbC6OzyrIRz9jPrdpjwChN_/exec";
+  "https://script.google.com/macros/s/AKfycbybD2rl8DtNK4iNHKAKpRWuYmLk4LfLoln-gybsJAjcQ03dRmentEAZOzkSBMQlrMz4/exec";
 
 const STUDENT_PORTAL_URL = "https://sppp-portal.vercel.app/";
 const PAGE_SIZE = 50;
@@ -58,6 +58,7 @@ export default function App() {
   const [students, setStudents] = useState([]);
   const [lookup, setLookup] = useState({ feeMaster: [], picUsers: [] });
   const [currentOfferings, setCurrentOfferings] = useState([]);
+  const [dashboardSummary, setDashboardSummary] = useState(null);
 
   const [draftSearch, setDraftSearch] = useState("");
   const [draftProgramFilter, setDraftProgramFilter] = useState("All");
@@ -81,15 +82,34 @@ export default function App() {
   const [studentDetail, setStudentDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
+  async function loadDashboardSummary() {
+    try {
+      const res = await fetch(`${API_URL}?action=getDashboardSummary`);
+      const data = await res.json();
+
+      if (data.success) {
+        setDashboardSummary(data.summary);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   async function loadStudents() {
     setLoading(true);
-    const res = await fetch(`${API_URL}?action=getStudents`);
-    const data = await res.json();
 
-    if (data.success) {
-      const normalized = (data.students || []).map(normalizeStudent);
-      setStudents(normalized);
-      loadCurrentOfferings(normalized);
+    try {
+      const res = await fetch(`${API_URL}?action=getStudents`);
+      const data = await res.json();
+
+      if (data.success) {
+        const normalized = (data.students || []).map(normalizeStudent);
+        setStudents(normalized);
+        loadCurrentOfferings(normalized);
+        loadDashboardSummary();
+      }
+    } catch (err) {
+      console.error(err);
     }
 
     setLoading(false);
@@ -452,12 +472,22 @@ export default function App() {
       </div>
 
       <main className="max-w-6xl mx-auto px-6 py-8 space-y-8">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <Stat title="Total Students" value={summary.total} />
-          <Stat title="Total Collected" value={money(summary.collected)} />
-          <Stat title="Total Outstanding" value={money(summary.outstanding)} danger={summary.outstanding > 0} />
-          <Stat title="LMS Blocked" value={summary.blocked} danger={summary.blocked > 0} />
-          <Stat title="LMS Active" value={summary.active} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-4">
+          <Stat title="Total Students" value={dashboardSummary?.totalStudents ?? summary.total} />
+          <Stat title="Total Enrolled Fee Value" value={money(dashboardSummary?.totalEnrolledFeeValue || 0)} />
+          <Stat title="Total Should Pay" value={money(dashboardSummary?.totalShouldPay || 0)} />
+          <Stat title="Total Collected" value={money(dashboardSummary?.totalCollected ?? summary.collected)} />
+          <Stat
+            title="Total Outstanding"
+            value={money(dashboardSummary?.totalOutstanding ?? summary.outstanding)}
+            danger={(dashboardSummary?.totalOutstanding ?? summary.outstanding) > 0}
+          />
+          <Stat
+            title="LMS Blocked"
+            value={dashboardSummary?.lmsBlocked ?? summary.blocked}
+            danger={(dashboardSummary?.lmsBlocked ?? summary.blocked) > 0}
+          />
+          <Stat title="LMS Active" value={dashboardSummary?.lmsActive ?? summary.active} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

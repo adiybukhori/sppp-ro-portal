@@ -485,13 +485,19 @@ export default function App() {
             />
           </div>
         
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 max-w-md">
-            <Stat
-              title="LMS Blocked"
-              value={dashboardSummary?.lmsBlocked ?? summary.blocked}
-              danger={(dashboardSummary?.lmsBlocked ?? summary.blocked) > 0}
-            />
-            <Stat title="LMS Active" value={dashboardSummary?.lmsActive ?? summary.active} />
+          <div className="flex justify-end gap-3">
+          <div className="rounded-full bg-white border border-slate-200 px-6 py-3 shadow-sm min-w-[170px]">
+            <p className="text-xs text-slate-500">LMS Blocked</p>
+            <p className="text-lg font-bold text-red-600">
+              {dashboardSummary?.lmsBlocked ?? summary.blocked}
+            </p>
+          </div>
+        
+          <div className="rounded-full bg-white border border-slate-200 px-6 py-3 shadow-sm min-w-[170px]">
+            <p className="text-xs text-slate-500">LMS Active</p>
+            <p className="text-lg font-bold text-slate-900">
+              {dashboardSummary?.lmsActive ?? summary.active}
+            </p>
           </div>
         </div>
 

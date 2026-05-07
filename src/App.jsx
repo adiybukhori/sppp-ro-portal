@@ -472,22 +472,27 @@ export default function App() {
       </div>
 
       <main className="max-w-6xl mx-auto px-6 py-8 space-y-8">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-4">
-          <Stat title="Total Students" value={dashboardSummary?.totalStudents ?? summary.total} />
-          <Stat title="Total Enrolled Fee Value" value={money(dashboardSummary?.totalEnrolledFeeValue || 0)} />
-          <Stat title="Total Should Pay" value={money(dashboardSummary?.totalShouldPay || 0)} />
-          <Stat title="Total Collected" value={money(dashboardSummary?.totalCollected ?? summary.collected)} />
-          <Stat
-            title="Total Outstanding"
-            value={money(dashboardSummary?.totalOutstanding ?? summary.outstanding)}
-            danger={(dashboardSummary?.totalOutstanding ?? summary.outstanding) > 0}
-          />
-          <Stat
-            title="LMS Blocked"
-            value={dashboardSummary?.lmsBlocked ?? summary.blocked}
-            danger={(dashboardSummary?.lmsBlocked ?? summary.blocked) > 0}
-          />
-          <Stat title="LMS Active" value={dashboardSummary?.lmsActive ?? summary.active} />
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <Stat title="Total Students" value={dashboardSummary?.totalStudents ?? summary.total} />
+            <Stat title="Total Enrolled Fee Value" value={money(dashboardSummary?.totalEnrolledFeeValue || 0)} />
+            <Stat title="Total Should Pay" value={money(dashboardSummary?.totalShouldPay || 0)} />
+            <Stat title="Total Collected" value={money(dashboardSummary?.totalCollected ?? summary.collected)} />
+            <Stat
+              title="Total Outstanding"
+              value={money(dashboardSummary?.totalOutstanding ?? summary.outstanding)}
+              danger={(dashboardSummary?.totalOutstanding ?? summary.outstanding) > 0}
+            />
+          </div>
+        
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 max-w-md">
+            <Stat
+              title="LMS Blocked"
+              value={dashboardSummary?.lmsBlocked ?? summary.blocked}
+              danger={(dashboardSummary?.lmsBlocked ?? summary.blocked) > 0}
+            />
+            <Stat title="LMS Active" value={dashboardSummary?.lmsActive ?? summary.active} />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

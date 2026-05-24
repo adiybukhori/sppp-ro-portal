@@ -4,7 +4,7 @@ import { Button } from "./components/ui/button.jsx";
 import { Input } from "./components/ui/input.jsx";
 
 const API_URL =
-  "https://script.google.com/macros/s/AKfycbybD2rl8DtNK4iNHKAKpRWuYmLk4LfLoln-gybsJAjcQ03dRmentEAZOzkSBMQlrMz4/exec";
+  "https://script.google.com/macros/s/AKfycbyic9bcS0S7B8UQ0BaBC1FG3v32ujbTYQbDNRRLtL1hgz2gTKypW92vGYA90G9eQBZ9/exec";
 
 const STUDENT_PORTAL_URL = "https://sppp-portal.vercel.app/";
 const PAGE_SIZE = 50;
